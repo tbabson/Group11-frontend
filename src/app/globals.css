@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #0b1e3a;
+  --color-navy-deep: #07142a;
+  --color-navy-light: #142c52;
+  --color-gold: #d4a017;
+  --color-gold-soft: #e8c76a;
+  --color-cream: #faf8f2;
+  --color-mist: #e9edf3;
+  --color-charcoal: #1f2937;
+
+  --font-display: var(--font-jakarta), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-ui: var(--font-montserrat), system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-cream text-charcoal font-sans antialiased;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+  button, nav a, .font-ui {
+    font-family: var(--font-ui);
+  }
+  ::selection {
+    @apply bg-gold text-navy;
+  }
+}
+
+@utility container-x {
+  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+}
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold tracking-wide transition-all duration-300 disabled:cursor-not-allowed disabled:opacity-50;
+  font-family: var(--font-ui);
+}
+@utility btn-gold {
+  @apply btn bg-gold text-navy shadow-lg shadow-gold/20 hover:bg-gold-soft hover:shadow-gold-soft/30;
+}
+@utility btn-outline {
+  @apply btn border border-gold/70 text-gold hover:border-gold-soft hover:bg-gold-soft hover:text-navy;
+}
+@utility btn-navy {
+  @apply btn bg-navy text-cream hover:bg-navy-light;
+}
+@utility btn-ghost {
+  @apply btn text-charcoal hover:bg-mist;
+}
+@utility eyebrow {
+  @apply text-xs font-semibold uppercase tracking-[0.25em] text-gold;
+  font-family: var(--font-ui);
+}
+@utility input {
+  @apply w-full rounded-xl border border-transparent bg-mist px-4 py-3 text-charcoal outline-none transition placeholder:text-charcoal/40 focus:border-gold focus:bg-white focus:ring-4 focus:ring-gold/15;
+}
+@utility label {
+  @apply mb-1.5 block text-sm font-medium text-charcoal/80;
+}
+@utility card {
+  @apply rounded-2xl bg-white shadow-sm ring-1 ring-navy/5;
+}
+@utility gold-text {
+  @apply bg-gradient-to-r from-gold via-gold-soft to-gold bg-clip-text text-transparent;
+}
+
+/* Faint diagonal line texture used on navy sections. */
+.navy-texture {
+  background-color: var(--color-navy);
+  background-image:
+    radial-gradient(ellipse at top, rgb(212 160 23 / 0.12), transparent 60%),
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.015) 0 2px, transparent 2px 14px);
+}
