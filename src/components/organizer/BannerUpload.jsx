@@ -25,13 +25,49 @@ export async function uploadBanner(eventId, file) {
 export const bannerErrorMessage = (err) =>
   err?.status === 503 ? 'Banner uploads are not configured on the server (Cloudinary keys missing).' : err?.message || 'Banner upload failed';
 
+// Banners are stored at exactly this size (16:9); the API crops other shapes to fit.
+export const BANNER_SIZE = { width: 1080, height: 608 };
+export const BANNER_SIZE_LABEL = `${BANNER_SIZE.width} × ${BANNER_SIZE.height} px (16:9)`;
+
+// Reads an image file's pixel size in the browser.
+export function readImageSize(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
+// Advice about an image's size compared with the banner size ('' when it's a good fit).
+export function bannerSizeAdvice(size) {
+  if (!size) return '';
+  const { width, height } = BANNER_SIZE;
+  const notes = [];
+  if (size.width < width || size.height < height) {
+    notes.push(`it is smaller than ${width} × ${height}, so it may look soft`);
+  }
+  if (Math.abs(size.width / size.height - width / height) > 0.02) {
+    notes.push('it is not 16:9, so the top/bottom or sides will be cropped (the preview shows what is kept)');
+  }
+  return notes.length ? `Heads up: ${notes.join('; ')}.` : '';
+}
+
 export default function BannerUpload({ event, onUploaded }) {
   const [preview, setPreview] = useState(null);
   const [file, setFile] = useState(null);
+  const [size, setSize] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const pick = (e) => {
+  const pick = async (e) => {
     const f = e.target.files?.[0];
     setError('');
     if (!f) return;
@@ -39,6 +75,7 @@ export default function BannerUpload({ event, onUploaded }) {
     if (problem) return setError(problem);
     setFile(f);
     setPreview(URL.createObjectURL(f));
+    setSize(await readImageSize(f));
   };
 
   const upload = async () => {
@@ -48,6 +85,7 @@ export default function BannerUpload({ event, onUploaded }) {
       await uploadBanner(event._id, file);
       setFile(null);
       setPreview(null);
+      setSize(null);
       onUploaded();
     } catch (err) {
       setError(bannerErrorMessage(err));
@@ -59,12 +97,20 @@ export default function BannerUpload({ event, onUploaded }) {
   return (
     <div className="card h-fit p-6">
       <h3 className="text-xl font-bold text-navy">Banner image</h3>
-      <p className="mt-1 text-sm text-charcoal/55">Shown on cards and as your event page backdrop. A wide 16:9 photo works best.</p>
+      <p className="mt-1 text-sm text-charcoal/55">
+        Shown on cards and as your event page backdrop. Recommended size: <strong>{BANNER_SIZE_LABEL}</strong>.
+      </p>
       <div className="mt-5 overflow-hidden rounded-2xl ring-1 ring-navy/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={preview || bannerFor(event)} alt="Event banner preview" className="aspect-video w-full object-cover" />
+        <img src={preview || bannerFor(event)} alt="Event banner preview" className="aspect-[1080/608] w-full object-cover" />
       </div>
       {!event.bannerUrl && !preview && <p className="mt-2 text-xs text-charcoal/50">Showing a placeholder photo until you upload one.</p>}
+      {size && (
+        <p className="mt-2 text-xs text-charcoal/60">
+          Selected image: {size.width} × {size.height} px. It will be saved at {BANNER_SIZE.width} × {BANNER_SIZE.height}.
+          {bannerSizeAdvice(size) && <span className="block text-amber-700">{bannerSizeAdvice(size)}</span>}
+        </p>
+      )}
       <div className="mt-4 space-y-3">
         <Alert>{error}</Alert>
         <label className="btn-ghost w-full cursor-pointer ring-1 ring-navy/10">

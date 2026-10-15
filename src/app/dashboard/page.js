@@ -158,8 +158,19 @@ function Tickets() {
 
       <Modal open={Boolean(cancelling)} onClose={() => setCancelling(null)} title="Cancel this ticket?">
         <p className="text-charcoal/70">
-          You&apos;ll lose your seat for <strong>{cancelling?.event?.title}</strong>
-          {cancelling?.ticketType?.price ? '. Paid tickets are refunded only if the event offers full refunds.' : '.'}
+          {cancelling?.status === 'pending' ? (
+            <>
+              This cancels the unpaid order for <strong>{cancelling?.event?.title}</strong>, including any other tickets bought with it, and
+              releases those seats.
+            </>
+          ) : (
+            <>
+              You&apos;ll lose this seat for <strong>{cancelling?.event?.title}</strong>
+              {cancelling?.ticketType?.price
+                ? '. Your other tickets stay valid. A paid ticket is refunded (just its price) only if the event offers full refunds.'
+                : '. Your other tickets stay valid.'}
+            </>
+          )}
         </p>
         <div className="mt-8 flex gap-3">
           <button className="btn-ghost flex-1" onClick={() => setCancelling(null)}>

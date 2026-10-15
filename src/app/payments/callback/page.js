@@ -17,8 +17,9 @@ export default function PaymentCallbackPage() {
   );
 }
 
-// Paystack (or the demo checkout) sends the buyer here. The webhook confirms the ticket,
-// so poll the newest registration for a few seconds until it leaves "pending".
+// Paystack (or the demo checkout) sends the buyer here with ?reference=…. Ask the API to
+// verify that payment with Paystack first (confirms the ticket even if the webhook is slow
+// or not configured), then fall back to polling the newest registration.
 function Result() {
   const reference = useSearchParams().get('reference');
   const router = useRouter();
@@ -38,8 +39,26 @@ function Result() {
     if (!loadSession()) return setState('unknown');
     let tries = 0;
     let timer;
+    let cancelled = false;
+
+    const verify = async () => {
+      if (!reference) return false;
+      try {
+        const { data } = await api('/payments/verify', { method: 'POST', body: { reference } });
+        if (cancelled) return true;
+        setReg({ _id: data.registrationId, status: data.registrationStatus, event: data.event, quantity: data.quantity || 1 });
+        if (data.registrationStatus === 'pending') return false;
+        setState(data.registrationStatus === 'confirmed' ? 'confirmed' : data.registrationStatus);
+        return true;
+      } catch {
+        return false; // fall back to polling below
+      }
+    };
+
     const check = async () => {
+      if (cancelled) return;
       tries += 1;
+      if (await verify()) return;
       try {
         const { data } = await api('/me/registrations', { query: { limit: 1 } });
         const latest = data[0];
@@ -52,13 +71,21 @@ function Result() {
       else setState('pending');
     };
     check();
-    return () => clearTimeout(timer);
-  }, []);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [reference]);
 
   const copy = {
     checking: ['Confirming your payment', 'This usually takes a few seconds…'],
-    confirmed: ['Payment successful', 'Your ticket is confirmed. Taking you back to the event…'],
-    cancelled: ['Payment not completed', 'The payment was declined or cancelled, so the seat was released. You can try again from the event page.'],
+    confirmed: [
+      'Payment successful',
+      reg?.quantity > 1
+        ? `Your ${reg.quantity} tickets are confirmed. Taking you back to the event…`
+        : 'Your ticket is confirmed. Taking you back to the event…',
+    ],
+    cancelled: ['Payment not completed', 'The payment was declined or cancelled, so the seats were released. You can try again from the event page.'],
     pending: ['Still processing', "We haven't received confirmation yet. Check My tickets in a minute."],
     unknown: ['Payment received', 'Sign in to see your ticket.'],
   }[state] || ['Payment update', `Your registration is now ${state}.`];

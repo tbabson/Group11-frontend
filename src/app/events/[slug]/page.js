@@ -16,7 +16,7 @@ export default function EventPage() {
   const { user, ready } = useAuth();
   const [event, setEvent] = useState(null);
   const [error, setError] = useState(null);
-  const [myReg, setMyReg] = useState(null);
+  const [myRegs, setMyRegs] = useState([]);
 
   const load = useCallback(() => {
     api(`/events/${slug}`)
@@ -28,11 +28,11 @@ export default function EventPage() {
     if (ready) load();
   }, [ready, load]);
 
-  // Show "you're going" if the signed-in attendee already holds a ticket.
+  // The signed-in attendee's tickets for this event (they can hold several and buy more).
   useEffect(() => {
-    if (!event || user?.role !== 'attendee') return setMyReg(null);
+    if (!event || user?.role !== 'attendee') return setMyRegs([]);
     api('/me/registrations', { query: { limit: 50 } })
-      .then(({ data }) => setMyReg(data.find((r) => r.event?._id === event._id && r.status !== 'cancelled') || null))
+      .then(({ data }) => setMyRegs(data.filter((r) => r.event?._id === event._id && r.status !== 'cancelled')))
       .catch(() => {});
   }, [event, user]);
 
@@ -66,7 +66,7 @@ export default function EventPage() {
       <Highlights event={event} />
       <Host event={event} />
       <Timeline event={event} />
-      <Tickets event={event} user={user} myReg={myReg} onChange={load} />
+      <Tickets event={event} user={user} myRegs={myRegs} onChange={load} />
       <Included />
       <WhyAttend />
       <Faq event={event} />
@@ -483,20 +483,37 @@ function saleState(t, event) {
   return { label: t.price ? 'Get ticket' : 'Reserve free', open: true };
 }
 
-function Tickets({ event, user, myReg, onChange }) {
+// Most tickets in one order (the API enforces the same limit).
+const MAX_PER_ORDER = 10;
+
+function Tickets({ event, user, myRegs, onChange }) {
   const router = useRouter();
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
+  const [qty, setQty] = useState({}); // ticketTypeId -> quantity chosen
 
-  // Arriving from /payments/callback?…→ /events/:slug?paid=1: show the confirmed ticket,
-  // then drop the flag so a refresh doesn't reopen it.
+  const held = myRegs.filter((r) => ['confirmed', 'checked-in', 'pending', 'waitlisted'].includes(r.status));
+
+  // Arriving from /payments/callback?…→ /events/:slug?paid=1: show the tickets of the order
+  // just paid for, then drop the flag so a refresh doesn't reopen it.
   useEffect(() => {
-    if (!myReg || !['confirmed', 'checked-in'].includes(myReg.status)) return;
     if (new URLSearchParams(window.location.search).get('paid') !== '1') return;
-    setResult({ status: 'confirmed', qrToken: myReg.qrToken, registrationId: myReg._id, ticket: myReg.ticketType || {} });
+    const confirmed = myRegs.filter((r) => ['confirmed', 'checked-in'].includes(r.status));
+    if (!confirmed.length) return;
+    const latest = confirmed[0]; // newest first
+    const order = confirmed.filter((r) => (latest.order ? r.order === latest.order : r._id === latest._id));
+    setResult({
+      status: 'confirmed',
+      ticket: latest.ticketType || {},
+      tickets: order.map((r) => ({ registrationId: r._id, qrToken: r.qrToken, status: r.status })),
+    });
     router.replace(`/events/${event.slug}`, { scroll: false });
-  }, [myReg, event.slug, router]);
+  }, [myRegs, event.slug, router]);
+
+  const quantityFor = (t) => qty[t._id] || 1;
+  const maxFor = (t) => Math.max(1, Math.min(MAX_PER_ORDER, t.available || MAX_PER_ORDER));
+  const setQuantity = (t, n) => setQty((q) => ({ ...q, [t._id]: Math.min(maxFor(t), Math.max(1, n)) }));
 
   const register = async (ticket) => {
     setError('');
@@ -504,15 +521,17 @@ function Tickets({ event, user, myReg, onChange }) {
     if (user.role !== 'attendee') return setError('Only attendee accounts can buy tickets. Sign in with an attendee account to register.');
     setBusy(ticket._id);
     try {
-      const { data } = await api(`/events/${event._id}/register`, { method: 'POST', body: { ticketTypeId: ticket._id } });
+      const quantity = quantityFor(ticket);
+      const { data } = await api(`/events/${event._id}/register`, { method: 'POST', body: { ticketTypeId: ticket._id, quantity } });
       if (data.checkoutUrl) {
         window.location.href = data.checkoutUrl;
         return;
       }
-      setResult({ ...data, ticket });
+      setResult({ ...data, ticket, tickets: data.tickets || [{ registrationId: data.registrationId, qrToken: data.qrToken, status: data.status }] });
+      setQty((q) => ({ ...q, [ticket._id]: 1 }));
       onChange();
     } catch (err) {
-      setError(err.code === 'ALREADY_REGISTERED' ? `${err.message}. View it under My tickets.` : err.message);
+      setError(err.message);
     } finally {
       setBusy(null);
     }
@@ -532,9 +551,9 @@ function Tickets({ event, user, myReg, onChange }) {
         </Reveal>
 
         <div className="mx-auto mt-8 max-w-2xl space-y-3">
-          {myReg && (
+          {held.length > 0 && (
             <Alert kind="info">
-              You already hold a <strong>{myReg.ticketType?.name}</strong> ticket ({myReg.status}).{' '}
+              You hold {held.length === 1 ? 'a ticket' : `${held.length} tickets`} for this event. You can buy more below.{' '}
               <Link href="/dashboard" className="font-semibold underline">
                 View in My tickets
               </Link>
@@ -596,14 +615,46 @@ function Tickets({ event, user, myReg, onChange }) {
                       </div>
                     </div>
 
+                    {state.open && (
+                      <div className="mt-8 flex items-center justify-between">
+                        <span className="font-ui text-xs font-semibold uppercase tracking-widest text-cream/60">Quantity</span>
+                        <div className="flex items-center gap-1 rounded-full bg-cream/10 p-1" role="group" aria-label={`${t.name} quantity`}>
+                          <button
+                            type="button"
+                            onClick={() => setQuantity(t, quantityFor(t) - 1)}
+                            disabled={quantityFor(t) <= 1 || busy}
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-cream hover:bg-cream/15 disabled:opacity-30"
+                            aria-label="One fewer"
+                          >
+                            −
+                          </button>
+                          <span className="w-8 text-center font-display text-lg font-bold" aria-live="polite">
+                            {quantityFor(t)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setQuantity(t, quantityFor(t) + 1)}
+                            disabled={quantityFor(t) >= maxFor(t) || busy}
+                            className="flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold text-cream hover:bg-cream/15 disabled:opacity-30"
+                            aria-label="One more"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <button
                       onClick={() => register(t)}
-                      disabled={!state.open || busy || Boolean(myReg)}
-                      className={`mt-8 w-full ${isFeatured ? 'btn-gold' : 'btn bg-cream text-navy hover:bg-gold-soft'}`}
+                      disabled={!state.open || busy}
+                      className={`${state.open ? 'mt-4' : 'mt-8'} w-full ${isFeatured ? 'btn-gold' : 'btn bg-cream text-navy hover:bg-gold-soft'}`}
                     >
                       {busy === t._id ? <Spinner className="h-4 w-4" /> : null}
-                      {state.label}
+                      {state.open && quantityFor(t) > 1 && !state.waitlist
+                        ? `${t.price ? 'Get' : 'Reserve'} ${quantityFor(t)} tickets${t.price ? ` · ${money(t.price * quantityFor(t), t.currency)}` : ''}`
+                        : state.label}
                     </button>
+                    {state.open && <p className="mt-2 text-center text-[11px] text-cream/40">Up to {MAX_PER_ORDER} per order · each ticket gets its own QR code</p>}
 
                     <Barcode seed={t._id} />
                   </div>
@@ -623,13 +674,33 @@ function Tickets({ event, user, myReg, onChange }) {
         ) : (
           <div className="text-center">
             <p className="mb-6 text-charcoal/70">
-              Your <strong>{result?.ticket.name}</strong> ticket for <strong>{event.title}</strong> is confirmed. Show this code at the door.
+              {result?.tickets?.length > 1 ? (
+                <>
+                  Your <strong>{result.tickets.length} {result?.ticket.name}</strong> tickets for <strong>{event.title}</strong> are confirmed. Each
+                  guest shows their own code at the door; each code works once.
+                </>
+              ) : (
+                <>
+                  Your <strong>{result?.ticket.name}</strong> ticket for <strong>{event.title}</strong> is confirmed. Show this code at the door.
+                </>
+              )}
             </p>
-            <TicketQR
-              token={result?.qrToken}
-              ticket={{ event, ticketType: result?.ticket, holder: user?.name, status: result?.status }}
-              filename={`ticket-${event.slug}.png`}
-            />
+            <div className={result?.tickets?.length > 1 ? 'max-h-[60vh] space-y-8 overflow-y-auto pr-1' : ''}>
+              {(result?.tickets || []).map((t, i, all) => (
+                <div key={t.registrationId || i}>
+                  {all.length > 1 && (
+                    <p className="mb-3 font-ui text-xs font-semibold uppercase tracking-widest text-charcoal/50">
+                      Ticket {i + 1} of {all.length}
+                    </p>
+                  )}
+                  <TicketQR
+                    token={t.qrToken}
+                    ticket={{ event, ticketType: result?.ticket, holder: user?.name, status: t.status }}
+                    filename={all.length > 1 ? `ticket-${event.slug}-${i + 1}.png` : `ticket-${event.slug}.png`}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <Link href="/dashboard" className="btn-navy mt-8 w-full">
