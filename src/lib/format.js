@@ -66,6 +66,11 @@ export function bannerFor(event) {
 
 export const titleCase = (s = '') => s.replace(/\b\w/g, (c) => c.toUpperCase());
 
+// True while an event is in progress (started, not yet ended).
+export function isLive(event, now = new Date()) {
+  return Boolean(event?.startAt && event?.endAt) && new Date(event.startAt) <= now && now < new Date(event.endAt);
+}
+
 export const STATUS_STYLES = {
   confirmed: 'bg-emerald-100 text-emerald-800',
   'checked-in': 'bg-sky-100 text-sky-800',

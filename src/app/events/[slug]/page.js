@@ -9,7 +9,8 @@ import { Alert, Modal, PageLoader, Spinner } from '@/components/UI';
 import TicketQR from '@/components/TicketQR';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { bannerFor, fmtDate, fmtTime, money, titleCase, where } from '@/lib/format';
+import { bannerFor, fmtDate, fmtTime, isLive, money, titleCase, where } from '@/lib/format';
+import { LiveBadge } from '@/components/EventCard';
 
 export default function EventPage() {
   const { slug } = useParams();
@@ -128,6 +129,7 @@ function Hero({ event, isOwner }) {
         </motion.div>
 
         <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
+          {event.status === 'published' && isLive(event) && <LiveBadge className="mb-6" />}
           {event.status !== 'published' && (
             <span className="mb-6 rounded-full bg-gold/20 px-4 py-1.5 font-ui text-xs font-semibold uppercase tracking-widest text-gold-soft ring-1 ring-gold/40">
               {event.status === 'draft' ? 'Draft preview' : event.status}
@@ -149,7 +151,7 @@ function Hero({ event, isOwner }) {
             transition={{ delay: 0.6 }}
             className="mt-10 flex flex-wrap items-center justify-center gap-4"
           >
-            {event.status === 'published' && (
+            {event.status === 'published' && !done && (
               <a href="#tickets" className="btn-gold">
                 Get tickets
               </a>
@@ -176,6 +178,11 @@ function Hero({ event, isOwner }) {
                 </div>
               ))}
             </motion.div>
+          )}
+          {event.status === 'published' && isLive(event) && (
+            <p className="mt-10 font-ui text-sm uppercase tracking-[0.25em] text-gold-soft">
+              In progress · ends {fmtTime(event.endAt)}
+            </p>
           )}
         </div>
 
@@ -477,6 +484,9 @@ const PERKS = {
 function saleState(t, event) {
   const now = new Date();
   if (event.status !== 'published') return { label: event.status === 'draft' ? 'Not published' : `Event ${event.status}`, open: false };
+  // Tickets can't be bought once the event has started.
+  if (now >= new Date(event.endAt)) return { label: 'Event ended', open: false };
+  if (now >= new Date(event.startAt)) return { label: 'Happening now', open: false };
   if (now < new Date(t.saleStart)) return { label: `Sales open ${fmtDate(t.saleStart)}`, open: false };
   if (now > new Date(t.saleEnd)) return { label: 'Sales ended', open: false };
   if (t.available === 0) return { label: 'Join waitlist', open: true, waitlist: true };

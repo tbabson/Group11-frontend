@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import EventCard from '@/components/EventCard';
+import EventCard, { LiveBadge } from '@/components/EventCard';
 import { Reveal, SectionHeading, Stagger, rise } from '@/components/Motion';
 import { EmptyState } from '@/components/UI';
 import { api } from '@/lib/api';
@@ -17,6 +17,7 @@ export default function HomePage() {
     <>
       <Hero />
       <Marquee />
+      <LiveNow />
       <UpcomingEvents />
       <Categories />
       <HowItWorks />
@@ -153,6 +154,43 @@ function Marquee() {
         ))}
       </motion.div>
     </div>
+  );
+}
+
+// Events in progress right now. Renders nothing when none are live.
+function LiveNow() {
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    api('/events', { query: { when: 'live', limit: 6, sort: 'startAt' }, auth: false })
+      .then(({ data }) => setEvents(data))
+      .catch(() => setEvents([]));
+  }, []);
+
+  if (!events.length) return null;
+  return (
+    <section className="bg-navy-deep py-20 text-cream">
+      <div className="container-x">
+        <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
+          <div>
+            <LiveBadge />
+            <h2 className="mt-4 text-4xl font-black sm:text-5xl">Happening now</h2>
+            <p className="mt-3 max-w-xl text-cream/60">
+              {events.length === 1 ? 'This event is live right now.' : `${events.length} events are live right now.`} Follow along or see
+              what&apos;s on.
+            </p>
+          </div>
+          <Link href="/events?when=live" className="btn-gold">
+            All live events →
+          </Link>
+        </div>
+        <Stagger className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {events.map((e) => (
+            <EventCard key={e._id} event={e} />
+          ))}
+        </Stagger>
+      </div>
+    </section>
   );
 }
 

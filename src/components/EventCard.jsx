@@ -3,10 +3,24 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { rise } from './Motion';
-import { bannerFor, fmtDate, fmtTime, titleCase, where } from '@/lib/format';
+import { bannerFor, fmtDate, fmtTime, isLive, titleCase, where } from '@/lib/format';
+
+// Pulsing "LIVE NOW" pill for events in progress.
+export function LiveBadge({ className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full bg-rose-600 px-3 py-1 font-ui text-xs font-bold uppercase tracking-wider text-white shadow-lg ${className}`}>
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+      </span>
+      Live now
+    </span>
+  );
+}
 
 export default function EventCard({ event }) {
   const start = new Date(event.startAt);
+  const live = isLive(event);
   return (
     <motion.article className="h-full" variants={rise} whileHover={{ y: -8 }} transition={{ type: 'spring', stiffness: 300, damping: 22 }}>
       <Link
@@ -31,13 +45,14 @@ export default function EventCard({ event }) {
           <span className="absolute right-4 top-4 rounded-full bg-navy/70 px-3 py-1 font-ui text-xs font-semibold text-gold-soft backdrop-blur">
             {titleCase(event.category)}
           </span>
+          {live && <LiveBadge className="absolute bottom-4 left-4" />}
         </div>
         <div className="flex flex-1 flex-col p-6">
           <h3 className="line-clamp-2 text-xl font-bold text-navy transition group-hover:text-gold">{event.title}</h3>
           <div className="mb-5 mt-3 space-y-1.5 text-sm text-charcoal/65">
             <p className="flex items-center gap-2">
               <Icon d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              {fmtDate(start, { weekday: 'short' })} · {fmtTime(start)}
+              {live ? `Started ${fmtTime(start)} · ends ${fmtTime(event.endAt)}` : `${fmtDate(start, { weekday: 'short' })} · ${fmtTime(start)}`}
             </p>
             <p className="flex items-center gap-2">
               <Icon d="M12 21s-7-6.2-7-11a7 7 0 1114 0c0 4.8-7 11-7 11zm0-8.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" />

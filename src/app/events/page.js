@@ -63,7 +63,7 @@ function EventsBrowser() {
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const pages = Math.max(1, Math.ceil(result.total / LIMIT));
-  const activeCount = ['q', 'category', 'city', 'from', 'to', 'isFree'].filter((k) => filters[k]).length;
+  const activeCount = ['q', 'category', 'city', 'from', 'to', 'isFree', 'when'].filter((k) => filters[k]).length;
 
   return (
     <section className="py-12">
@@ -94,6 +94,18 @@ function EventsBrowser() {
             <option value="-createdAt">Newest added</option>
             <option value="title">Title A–Z</option>
           </select>
+          <select
+            className="input"
+            value={form.when || ''}
+            onChange={set('when')}
+            aria-label="When"
+            disabled={Boolean(form.from || form.to)}
+            title={form.from || form.to ? 'Clear the dates to choose this' : undefined}
+          >
+            <option value="">Upcoming</option>
+            <option value="live">Happening now</option>
+            <option value="current">Live &amp; upcoming</option>
+          </select>
           <label className="flex items-center gap-2 lg:col-span-2">
             <span className="w-12 shrink-0 text-sm text-charcoal/60">From</span>
             <input type="date" className="input" value={form.from || ''} onChange={set('from')} />
@@ -102,7 +114,7 @@ function EventsBrowser() {
             <span className="w-12 shrink-0 text-sm text-charcoal/60">To</span>
             <input type="date" className="input" value={form.to || ''} onChange={set('to')} />
           </label>
-          <div className="flex gap-2 sm:col-span-2 lg:col-span-2">
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
             <button className="btn-gold flex-1">Apply filters</button>
             {activeCount > 0 && (
               <button type="button" onClick={() => apply({})} className="btn-ghost">
@@ -114,7 +126,9 @@ function EventsBrowser() {
 
         <div className="mb-6 mt-10 flex items-center justify-between">
           <p className="font-ui text-sm text-charcoal/60">
-            {result.items ? `${result.total} event${result.total === 1 ? '' : 's'} found` : 'Searching…'}
+            {result.items
+              ? `${result.total} ${filters.when === 'live' ? 'live ' : ''}event${result.total === 1 ? '' : 's'} found`
+              : 'Searching…'}
           </p>
         </div>
 
@@ -136,8 +150,13 @@ function EventsBrowser() {
           ) : (
             <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <EmptyState
-                title={error ? 'Could not load events' : 'No events match your filters'}
-                text={error || 'Try a different search, widen the dates, or clear the filters.'}
+                title={error ? 'Could not load events' : filters.when === 'live' ? 'Nothing is live right now' : 'No events match your filters'}
+                text={
+                  error ||
+                  (filters.when === 'live'
+                    ? 'No event is in progress at the moment. Check the upcoming events instead.'
+                    : 'Try a different search, widen the dates, or clear the filters.')
+                }
                 action={
                   activeCount > 0 && (
                     <button onClick={() => apply({})} className="btn-navy">
