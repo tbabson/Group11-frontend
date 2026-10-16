@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import RequireRole from '@/components/RequireRole';
+import TransactionsTable from '@/components/TransactionsTable';
 import { Reveal } from '@/components/Motion';
 import { Alert, Field, PageHeader, PageLoader, Spinner, StatusBadge } from '@/components/UI';
 import { api, fieldErrors } from '@/lib/api';
@@ -102,6 +103,15 @@ function Payouts() {
             )}
           </Reveal>
         </div>
+        <Reveal delay={0.15} className="container-x mt-8">
+          <TransactionsTable
+            path="/transactions/me"
+            audience="organizer"
+            types={['commission', 'payout']}
+            title="Transactions"
+            emptyText="Nothing yet. Platform fees appear here as your paid tickets sell, and payouts once they're sent."
+          />
+        </Reveal>
       </section>
     </>
   );

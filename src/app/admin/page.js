@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import RequireRole from '@/components/RequireRole';
+import TransactionsTable from '@/components/TransactionsTable';
 import { Stagger, rise } from '@/components/Motion';
 import { Alert, PageHeader, PageLoader, Spinner, StatusBadge } from '@/components/UI';
 import { api } from '@/lib/api';
@@ -11,6 +12,7 @@ import { fmtDate, money } from '@/lib/format';
 
 const TABS = [
   ['revenue', 'Revenue'],
+  ['transactions', 'Transactions'],
   ['users', 'Users'],
   ['payouts', 'Payouts'],
 ];
@@ -47,6 +49,14 @@ function Admin() {
             ))}
           </div>
           {tab === 'revenue' && <Revenue />}
+          {tab === 'transactions' && (
+            <TransactionsTable
+              path="/admin/transactions"
+              audience="admin"
+              title="Transactions"
+              emptyText="No money has moved yet. Ticket payments, fees, refunds and payouts appear here."
+            />
+          )}
           {tab === 'users' && <Users />}
           {tab === 'payouts' && <PayoutsTable />}
         </div>
