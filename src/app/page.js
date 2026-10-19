@@ -8,6 +8,7 @@ import EventCard, { LiveBadge } from '@/components/EventCard';
 import { Reveal, SectionHeading, Stagger, rise } from '@/components/Motion';
 import { EmptyState } from '@/components/UI';
 import { api } from '@/lib/api';
+import { useLiveEvents } from '@/lib/live';
 import { CATEGORIES } from '@/lib/site';
 
 const HEADLINE = ['Where', 'Unforgettable', 'Moments', 'Begin'];
@@ -157,17 +158,12 @@ function Marquee() {
   );
 }
 
-// Events in progress right now. Renders nothing when none are live.
+// Events in progress right now. Renders nothing when none are live; each event disappears
+// the moment it ends and the list re-checks the API every minute.
 function LiveNow() {
-  const [events, setEvents] = useState([]);
+  const events = useLiveEvents({ limit: 6 });
 
-  useEffect(() => {
-    api('/events', { query: { when: 'live', limit: 6, sort: 'startAt' }, auth: false })
-      .then(({ data }) => setEvents(data))
-      .catch(() => setEvents([]));
-  }, []);
-
-  if (!events.length) return null;
+  if (!events?.length) return null;
   return (
     <section className="bg-navy-deep py-20 text-cream">
       <div className="container-x">

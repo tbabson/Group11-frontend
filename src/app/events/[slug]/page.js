@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { bannerFor, fmtDate, fmtTime, isLive, money, titleCase, where } from '@/lib/format';
 import { LiveBadge } from '@/components/EventCard';
+import { useEndTicker } from '@/lib/live';
 
 export default function EventPage() {
   const { slug } = useParams();
@@ -104,6 +105,7 @@ function Hero({ event, isOwner }) {
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);
   const { done, parts } = useCountdown(event.startAt);
+  useEndTicker([event]); // re-render when the event ends so the LIVE badge goes away
   const city = event.venue?.city || (event.onlineUrl ? 'Online' : '');
   const dateLabel =
     start.toDateString() === end.toDateString()
@@ -502,6 +504,7 @@ function Tickets({ event, user, myRegs, onChange }) {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [qty, setQty] = useState({}); // ticketTypeId -> quantity chosen
+  useEndTicker([event]); // "Happening now" turns into "Event ended" without a reload
 
   const held = myRegs.filter((r) => ['confirmed', 'checked-in', 'pending', 'waitlisted'].includes(r.status));
 

@@ -1,12 +1,14 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import EventCard from '@/components/EventCard';
 import { Stagger } from '@/components/Motion';
 import { EmptyState, PageHeader } from '@/components/UI';
 import { api } from '@/lib/api';
+import { isLive } from '@/lib/format';
+import { useEndTicker } from '@/lib/live';
 import { CATEGORIES } from '@/lib/site';
 
 const LIMIT = 9;
@@ -32,11 +34,25 @@ function EventsBrowser() {
   const [form, setForm] = useState(filters);
   const [result, setResult] = useState({ items: null, total: 0 });
   const [error, setError] = useState('');
+  const [refresh, setRefresh] = useState(0);
+  const lastKey = useRef(null);
+
+  // Live lists change by the minute: re-check quietly every 60 s while one is shown.
+  const timeSensitive = filters.when === 'live' || filters.when === 'current';
+  useEffect(() => {
+    if (!timeSensitive) return undefined;
+    const t = setInterval(() => setRefresh((n) => n + 1), 60 * 1000);
+    return () => clearInterval(t);
+  }, [timeSensitive]);
 
   const key = params.toString();
   useEffect(() => {
-    setForm(Object.fromEntries(new URLSearchParams(key).entries()));
-    setResult((r) => ({ ...r, items: null }));
+    // Show the loading skeleton only for a new search, not for the background refresh.
+    if (lastKey.current !== key) {
+      setForm(Object.fromEntries(new URLSearchParams(key).entries()));
+      setResult((r) => ({ ...r, items: null }));
+      lastKey.current = key;
+    }
     setError('');
     const query = Object.fromEntries(new URLSearchParams(key).entries());
     if (query.from) query.from = new Date(query.from).toISOString();
@@ -47,7 +63,15 @@ function EventsBrowser() {
         setError(err.message);
         setResult({ items: [], total: 0 });
       });
-  }, [key]);
+  }, [key, refresh]);
+
+  // Drop events the moment they end (live and "live & upcoming" lists).
+  const now = useEndTicker(timeSensitive ? result.items : null);
+  const items =
+    result.items && timeSensitive
+      ? result.items.filter((e) => (filters.when === 'live' ? isLive(e, new Date(now)) : new Date(e.endAt).getTime() > now))
+      : result.items;
+  const hidden = result.items && items ? result.items.length - items.length : 0;
 
   const apply = (next) => {
     const merged = { ...next };
@@ -126,23 +150,23 @@ function EventsBrowser() {
 
         <div className="mb-6 mt-10 flex items-center justify-between">
           <p className="font-ui text-sm text-charcoal/60">
-            {result.items
-              ? `${result.total} ${filters.when === 'live' ? 'live ' : ''}event${result.total === 1 ? '' : 's'} found`
+            {items
+              ? `${result.total - hidden} ${filters.when === 'live' ? 'live ' : ''}event${result.total - hidden === 1 ? '' : 's'} found`
               : 'Searching…'}
           </p>
         </div>
 
         <AnimatePresence mode="wait">
-          {!result.items ? (
+          {!items ? (
             <motion.div key="loading" exit={{ opacity: 0 }} className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="h-96 animate-pulse rounded-3xl bg-mist" />
               ))}
             </motion.div>
-          ) : result.items.length ? (
+          ) : items.length ? (
             <motion.div key={key} initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <Stagger className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-                {result.items.map((e) => (
+                {items.map((e) => (
                   <EventCard key={e._id} event={e} />
                 ))}
               </Stagger>
